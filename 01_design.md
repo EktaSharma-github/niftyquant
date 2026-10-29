@@ -216,13 +216,17 @@ So the design introduces a **surrogate key** (`security_id`) and moves the ident
 | Q5 | Winners-decile churn; turnarounds | **EXCEPT**, **INTERSECT** |
 
 ### 6.2 SQL statistics and k-means ([07_analytics.sql](07_analytics.sql), notebook)
-A1 moments (skew, kurtosis) · A2 information coefficient (RANK + CORR) · A3 momentum crashes · A4 sector betas (REGR_SLOPE, GROUPING SETS) · A5 liquidity bands (WIDTH_BUCKET) · `v_stock_features` (7 features over 60 months, all in SQL) → k-means (k = 4) → `segment` / `security_segment` → S1 (sector mix), S2 (down-market behaviour).
+A1 moments (skew, kurtosis) · A2 information coefficient (RANK + CORR) · A3 momentum crashes · A4 sector betas (REGR_SLOPE, GROUPING SETS) · A5 liquidity bands (WIDTH_BUCKET) · A6 horizon decay (CROSS JOIN generate_series, running SUM) · A7 market states (ROWS BETWEEN 12 PRECEDING AND 1 PRECEDING) · `v_stock_features` (7 features over 60 months, all in SQL) → k-means (k = 4) → `segment` / `security_segment` → S1 (sector mix), S2 (down-market behaviour).
 
 ### 6.3 Findings (from the executed notebook)
 - **Momentum works, strongly.** 12-1 deciles over Jan 2011 – Oct 2026: winners **+26.3%** a year, losers **−7.0%**, NIFTY 500 **+9.9%**. Winners-minus-losers 2.34% a month, t = 4.52 (bootstrap 95% CI 1.30%–3.34%). IC 0.06, t = 4.9.
 - **Weaker in large caps:** top-200 quintiles WML 13.0% a year (Sharpe 0.67) against 27.9% (1.13) for the top 500.
 - **Costs matter but don't kill it:** ~27% monthly turnover; ₹1 lakh → ₹40.5 lakh gross, ₹31.2 lakh after 0.5% per rebalance, ₹4.4 lakh in the NIFTY 500.
 - **Crashes come in rebounds:** June 2020 (−33.6%), January 2012, April 2020.
+- **It works only after rising markets (A7):** 3.13% a month (t = 6.3) after a year in which the NIFTY 500 rose; −0.30% (t = −0.2) after a falling year, when last year's losers rebound 3.65% a month. Holding momentum only after rising years lifts the Sharpe ratio from 1.01 to 1.47 and the worst month from −34% to −18% (in-sample: the rule was chosen after seeing A7). Volatility scaling cuts the drawdown but not the worst month.
+- **Not market risk:** CAPM beta −0.51, alpha 2.80% a month (t = 5.7); losers carry beta 1.75, winners 1.24.
+- **Slow and shrinking (A6):** the premium fades from 2.34% in month 1 to 0.47% in month 12 without reversing (15% in total); by sub-period it fell from 2.99% (2011–15) to 2.46% (2016–19) to 1.78% a month (2020–26), significant in each.
+- **Costs and the skipped month:** break-even cost 4.2% of value traded per rebalance at 27.6% monthly turnover; 12-0 and 12-1 earn the same (no short-term reversal in India).
 - **Survivorship bias: 2.4 points a year** (5–7 points a year in 2011–14).
 - **Fat tails:** monthly excess kurtosis 7.0. **Sector betas:** construction 1.63 … healthcare 0.87.
 - **Four kinds of stock:** Momentum Leaders (88), Defensive Compounders (152), Dividend Yielders (36), Volatile Laggards (133); validated against sector, which the model never saw (χ² p ≈ 10⁻²⁷, Cramér's V 0.43). In down months Defensive Compounders and Dividend Yielders fell 4.5% vs the market's 5.2%; Volatile Laggards 7.3%.

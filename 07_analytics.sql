@@ -163,6 +163,77 @@ GROUP BY 1 ORDER BY 1;
 
 
 -- =====================================================================
+-- A6. HOW LONG DOES MOMENTUM LAST?
+-- Winners-minus-losers return k months after formation, k = 1..12, with a
+-- t-statistic per horizon and the running total. If momentum were a
+-- short-lived overreaction it would reverse; if it is slow diffusion of
+-- information it should fade gradually.
+-- FDS: CROSS JOIN with generate_series to create the horizons, a join on
+-- a computed month number, aggregates of aggregates, a running SUM window.
+-- =====================================================================
+
+WITH p AS (SELECT strategy_id, n_buckets FROM strategy WHERE strategy_code = 'MOM_12_1'),
+legs AS (
+    SELECT k, h.formation_date, h.bucket, avg(m.ret) AS ret
+    FROM portfolio_holding h
+    JOIN p ON p.strategy_id = h.strategy_id AND h.bucket IN (1, p.n_buckets)
+    CROSS JOIN generate_series(1, 12) AS k
+    JOIN mv_monthly_return m ON m.security_id = h.security_id
+                            AND m.month_no = month_no(h.formation_date) + k
+    WHERE month_no(h.formation_date) + k < (SELECT max(month_no) FROM v_month_end)
+    GROUP BY k, h.formation_date, h.bucket
+), wml AS (
+    SELECT w.k, w.ret - l.ret AS wml
+    FROM legs w JOIN legs l ON l.k = w.k AND l.formation_date = w.formation_date AND l.bucket = 1
+    WHERE w.bucket = (SELECT n_buckets FROM p)
+)
+SELECT k AS months_after_formation,
+       count(*)                                                       AS formations,
+       round(100 * avg(wml)::numeric, 2)                              AS wml_pct,
+       round((avg(wml) / stddev(wml) * sqrt(count(*)))::numeric, 2)   AS t_stat,
+       round(100 * sum(avg(wml)) OVER (ORDER BY k)::numeric, 1)       AS cumulative_pct
+FROM wml
+GROUP BY k
+ORDER BY k;
+
+
+-- =====================================================================
+-- A7. DOES MOMENTUM DEPEND ON THE MARKET'S MOOD?
+-- Splits holding months by the NIFTY 500's return over the 12 months
+-- before formation: after a falling year ("down state") vs a rising year.
+-- Winners, losers and winners-minus-losers in each state, with t-stats.
+-- FDS: a window SUM over the 12 preceding rows (ROWS BETWEEN 12 PRECEDING
+-- AND 1 PRECEDING) to build the state, CASE to label it, a self-join of
+-- the portfolio view, conditional aggregation.
+-- =====================================================================
+
+WITH p AS (SELECT strategy_id, n_buckets FROM strategy WHERE strategy_code = 'MOM_12_1'),
+state AS (
+    SELECT month_no,
+           sum(ln(1 + ret)) OVER (ORDER BY month_no ROWS BETWEEN 12 PRECEDING AND 1 PRECEDING) AS prior_12m,
+           count(ret)       OVER (ORDER BY month_no ROWS BETWEEN 12 PRECEDING AND 1 PRECEDING) AS n
+    FROM v_index_monthly_return WHERE index_code = 'NIFTY500'
+), months AS (
+    SELECT w.holding_month_no, w.ret AS winners, l.ret AS losers, w.ret - l.ret AS wml,
+           CASE WHEN s.prior_12m < 0 THEN 'After a falling year' ELSE 'After a rising year' END AS market_state
+    FROM p
+    JOIN v_portfolio_return w ON w.strategy_id = p.strategy_id AND w.bucket = p.n_buckets
+    JOIN v_portfolio_return l ON l.strategy_id = p.strategy_id AND l.bucket = 1
+                             AND l.holding_month_no = w.holding_month_no
+    JOIN state s ON s.month_no = w.holding_month_no AND s.n = 12
+)
+SELECT market_state,
+       count(*)                                                       AS months,
+       round(100 * avg(winners)::numeric, 2)                          AS winners_pct,
+       round(100 * avg(losers)::numeric, 2)                           AS losers_pct,
+       round(100 * avg(wml)::numeric, 2)                              AS wml_pct,
+       round((avg(wml) / stddev(wml) * sqrt(count(*)))::numeric, 2)   AS t_stat
+FROM months
+GROUP BY market_state
+ORDER BY market_state DESC;
+
+
+-- =====================================================================
 -- Feature view for k-means: one row per stock in today's universe with at
 -- least 48 of the last 60 months. Every feature is computed in SQL.
 --   ann_return     geometric, annualized          ann_vol      annualized SD

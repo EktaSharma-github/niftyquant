@@ -59,10 +59,68 @@ Momentum is a bet that trends continue, and it loses when the trend snaps upward
 @@ 2.2
 **Reading 2.2.** Survivorship bias is real and large. Restricting the same universe to stocks
 still listed today raises its equal-weighted return from **10.1% to 12.4% a year**: 2.4 points a
-year of returns that never existed. The gap is widest in 2011–2014 (5–7 points a year, Q2), when the
-universe held 90–140 stocks that have since delisted, and it shrinks towards zero for recent
+year of returns that never existed. The gap is widest in 2012–2014 (5–7 points a year, Q2), when an
+average of 94–123 of each month's 500 members later delisted, and it shrinks towards zero for recent
 years only because recent members haven't yet had time to fail. This is why the universe is
 rebuilt at every month-end from the prices known *that day*, with delisted stocks included.
+
+@@ A6
+**Reading A6.** Momentum is slow, not a flash. The premium is largest in the first month
+(2.34%) and fades steadily, but stays significant in 10 of the 12 months and **never turns
+negative**: holding the same portfolio for a year adds up to about **15%**. There is no reversal, so
+this is not traders overshooting and then correcting. It fits the slow-diffusion explanation:
+news about a company reaches its price over months, not days. The practical consequence is that
+monthly rebalancing is not essential; a slower strategy keeps most of the premium with far less
+trading.
+
+@@ A7
+**Reading A7.** This is the most important result in the project. Momentum works only after the
+market has risen. In the 144 months that followed a rising year for the NIFTY 500, winners-minus-losers
+earned **3.13% a month (t = 6.3)**. In the 45 months that followed a falling year it earned
+**−0.30% (t = −0.2)**: nothing. The cause is visible in the two legs. After a falling year, last
+year's losers (the stocks that fell hardest) bounce back by 3.65% a month, more than the winners'
+3.35%. A bear market ends with a rebound led by the most beaten-down stocks, and that is exactly
+where a momentum strategy is short.
+
+@@ CAPM
+**Reading the regression.** Momentum is not compensation for market risk. Winners-minus-losers
+has a **negative beta (−0.51)**: losers are more sensitive to the market (β 1.75) than winners (β 1.24),
+because last year's losers are mostly high-risk stocks. Yet its alpha is **2.80% a month (t = 5.7)**.
+Both legs contribute: winners beat their market exposure by 1.14% a month, losers fall short by 1.66%.
+The negative beta also explains A7: when the market rebounds sharply, a negative-beta portfolio
+loses.
+
+@@ Subperiods
+**Reading the sub-periods.** The premium is shrinking. It fell from 2.99% a month (2011–15) to
+2.46% (2016–19) to 1.78% (2020–26), and the Sharpe ratio from about 1.4 to 0.85. It is still
+significant in every period (t ≥ 2.2). A falling premium is what finance expects once an anomaly
+is widely known and traded; we did not test the cause, and the 2020–26 period also contains the
+largest crash (June 2020).
+
+@@ Crash control
+**Reading the comparison.** Scaling by recent volatility barely helps: the Sharpe ratio moves from
+1.01 to 1.04 and the worst drawdown improves (−48% to −35%), but the worst month is unchanged
+(−34%), because June 2020's crash came after a calm period. The rule from A7, staying in cash after a
+falling year, does what volatility scaling cannot: Sharpe **1.47**, worst drawdown −32%, worst month
+**−18%**, and a higher return (29.3% against 24.4% a year), because the months it skips earned
+nothing on average.
+
+One caution decides how far to trust this. The rule uses only information available at each
+formation date, so it is not look-ahead. But we chose it after seeing A7 on the same data, so
+1.47 is an in-sample figure. The same market-state effect is documented for US stocks (Cooper, Gutierrez and
+Hameed, "Market States and Momentum", Journal of Finance, 2004), which makes it more than a fitted accident, but it needs an out-of-sample test before anyone trades it.
+(Both comparisons use the 178 months where 12 months of history exist for the volatility estimate.)
+
+@@ Costs and skip
+**Reading costs and the skipped month.** The winners decile replaces about **28% of its names
+each month**. Even so, it beats the NIFTY 500 unless trading costs exceed **4.2% of the value
+traded** at every rebalance. Realistic costs for liquid NSE stocks (brokerage, securities transaction
+tax, impact) are a fraction of that, so costs alone cannot explain the premium away.
+
+Skipping the most recent month, standard in US research because US stocks reverse over a month,
+**makes no difference in India**: 12-0 and 12-1 earn 2.37% and 2.32% a month. Last month's winners
+alone keep winning slightly (+0.52%, t = 1.3, not significant), where US data shows reversal. We keep
+12-1 to stay comparable with published work.
 
 @@ 3.1
 **Reading 3.1.** Two pairs are strongly related: **winner share and annual return (0.76)**, as
@@ -126,10 +184,21 @@ in a straight line.
 
 **Momentum (§2).** Last year's winners beat last year's losers by 2.34% a month for 16 years
 (t = 4.5), the winners decile compounding at 26% a year against the index's 10%. The signal's rank
-correlation with next month's return (IC 0.06) is small but persistent. It fails in one recognisable
-situation: sharp rebounds after a fall (June 2020, April 2020, January 2012). The database design is
+correlation with next month's return (IC 0.06) is small but persistent. The database design is
 part of the result: a backtest on today's survivors would have added 2.4 points a year that never
 existed.
+
+**Why and when (§2.3).** Four findings explain the premium:
+* **It works only after rising markets:** 3.13% a month after a rising year, nothing after a falling
+  one, because bear markets end with the losers rebounding hardest.
+* **It is not market risk:** beta −0.51, alpha 2.80% a month (t = 5.7).
+* **It is slow:** the premium fades over 12 months without reversing, consistent with news reaching
+  prices gradually.
+* **It is shrinking:** from 2.99% to 1.78% a month across the three sub-periods, still significant.
+
+Two practical results follow. Sitting out after falling years raises the Sharpe ratio from 1.01 to
+1.47 and halves the worst month (in-sample; untested out of sample). Trading costs would have to
+exceed 4.2% of the value traded to erase the premium.
 
 **Kinds of stock (§3–5).** Four segments built only from price behaviour (Momentum Leaders,
 Defensive Compounders, Dividend Yielders, Volatile Laggards) line up with sectors the model never
@@ -143,5 +212,7 @@ Volatile Laggards lose most and don't recover it.
 * 82 price jumps around demergers and schemes of arrangement are set to 0 because NSE's notices give
   no ratio; a professional data vendor would adjust them.
 * Segments are descriptive: features and outcomes (S2) come from the same five years.
+* The market-state rule was chosen after seeing the data that tests it; its Sharpe ratio of 1.47 is
+  in-sample.
 
 *Research use only; not investment advice.*

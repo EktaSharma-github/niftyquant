@@ -343,6 +343,157 @@ save(fig, "05_survivorship"); plt.show()
 reading("2.2")
 
 md("""
+### 2.3 How long does it last, when does it fail, and is it just risk?
+
+### A6. Momentum k months after formation
+""")
+
+code('a6 = run_sql("A6"); a6')
+
+code(r'''
+fig, ax = plt.subplots(figsize=(7.2, 3.4))
+sig = a6.t_stat >= 1.96
+ax.bar(a6.months_after_formation, a6.wml_pct, color=[BLUE if s else MID for s in sig], edgecolor=GRID)
+ax.set_xlabel("Months after the portfolio is formed"); ax.set_ylabel("Winners minus losers, % in that month")
+ax.set_xticks(range(1, 13)); ax.grid(axis="x", visible=False)
+ax2 = ax.twinx(); ax2.plot(a6.months_after_formation, a6.cumulative_pct, color=ORANGE, marker="o", lw=2)
+ax2.set_ylabel("Running total, %"); ax2.grid(False); ax2.spines["right"].set_visible(True); ax2.set_ylim(0, None)
+ax.set_title("The premium fades over a year but never reverses (blue: t ≥ 1.96)")
+save(fig, "11_horizon_decay"); plt.show()
+''')
+reading("A6")
+
+md("""
+### A7. Momentum after rising and falling markets
+""")
+
+code('a7 = run_sql("A7"); a7')
+
+code(r'''
+d = a7.set_index("market_state").loc[["After a rising year", "After a falling year"]]
+fig, ax = plt.subplots(figsize=(7.2, 3.2))
+x = np.arange(2); w = 0.26
+ax.bar(x - w, d.winners_pct, w, color=BLUE, label="Winners (D10)")
+ax.bar(x, d.losers_pct, w, color=MID, edgecolor=GRID, label="Losers (D01)")
+ax.bar(x + w, d.wml_pct, w, color=ORANGE, label="Winners minus losers")
+for i, v in enumerate(d.wml_pct):
+    ax.annotate(f"{v:+.2f}%", (i + w, v), xytext=(0, 4 if v >= 0 else -12), textcoords="offset points", ha="center", fontsize=9, color=INK)
+ax.axhline(0, color=INK2, lw=0.8)
+ax.set_xticks(x, [f"{s}\n({n} months)" for s, n in zip(d.index, d.months)])
+ax.set_ylabel("Average monthly return, %"); ax.grid(axis="x", visible=False); ax.legend(frameon=False, fontsize=8)
+ax.set_title("After a falling year, last year's losers rebound as hard as the winners")
+save(fig, "12_market_state"); plt.show()
+''')
+reading("A7")
+
+md("""
+### Is momentum just market risk? (CAPM regression)
+
+Each portfolio's monthly return regressed on the NIFTY 500's: the intercept (α) is the return
+the market does not explain, the slope (β) its market exposure.
+""")
+
+code(r'''
+rows = []
+for name, col in [("Winners (D10)", 10), ("Losers (D01)", 1), ("Winners minus losers", "WML")]:
+    s = wide[[col, "nifty"]].dropna()
+    r = stats.linregress(s["nifty"], s[col])
+    rows.append((name, 100 * r.intercept, r.intercept / r.intercept_stderr, r.slope, r.rvalue ** 2))
+capm = pd.DataFrame(rows, columns=["portfolio", "alpha % a month", "alpha t", "beta", "R²"]).round(2)
+capm
+''')
+reading("CAPM")
+
+md("""
+### Has it faded? Sub-periods
+""")
+
+code(r'''
+yr = pd.Series([(n - 1) // 12 for n in wide.index], index=wide.index)
+rows = []
+for a, b in [(2011, 2015), (2016, 2019), (2020, 2026)]:
+    s = wide.loc[(yr >= a) & (yr <= b), "WML"].dropna()
+    rows.append((f"{a}-{b}", len(s), 100 * s.mean(), s.mean() / s.std() * np.sqrt(len(s)), s.mean() / s.std() * np.sqrt(12)))
+sub = pd.DataFrame(rows, columns=["period", "months", "WML % a month", "t", "Sharpe"]).round(2)
+sub
+''')
+reading("Subperiods")
+
+md("""
+### Can the crashes be avoided?
+
+Two ways to manage the risk, both using only information available at formation:
+
+* **Volatility scaling:** size the long-short position to target 20% annual volatility, using
+  the standard deviation of its previous 12 monthly returns (leverage capped at 2×).
+* **Market-state rule (from A7):** hold winners-minus-losers only after a rising year for the
+  NIFTY 500; otherwise stay in cash.
+""")
+
+code(r'''
+nifty_all = idx.set_index("holding_month_no")["nifty"].sort_index()
+prior = np.log1p(nifty_all).rolling(12).sum().shift(1).reindex(wide.index)
+wml = wide["WML"]
+vol = wml.rolling(12).std().shift(1) * np.sqrt(12)
+scaled = wml * (0.20 / vol).clip(upper=2)
+timed = wml.where(prior >= 0, 0.0)
+variants = {"Always on": wml, "Volatility-scaled": scaled, "Only after a rising year": timed}
+common = scaled.dropna().index
+tab = pd.DataFrame({k: scorecard(v.loc[common]) for k, v in variants.items()}).T
+tab["worst month %"] = [100 * v.loc[common].min() for v in variants.values()]
+tab = tab.round(2); tab
+''')
+
+code(r'''
+fig, ax = plt.subplots(figsize=(7.2, 3.4))
+dts = [month_label(n) for n in common]
+for (k, v), c in zip(variants.items(), [MID, ORANGE, BLUE]):
+    ax.plot(dts, (1 + v.loc[common]).cumprod(), lw=2 if c == BLUE else 1.6, color=INK2 if c == MID else c, label=k)
+ax.set_yscale("log"); ax.set_ylabel("Growth of ₹1, long-short (log)"); ax.legend(frameon=False, fontsize=8)
+ax.set_title("Sitting out after falling years removes the worst crashes")
+save(fig, "13_crash_control"); plt.show()
+''')
+reading("Crash control")
+
+md("""
+### How much trading cost can it absorb? Does skipping the last month matter?
+""")
+
+code(r'''
+held = num(query("""SELECT month_no(h.formation_date) AS fm, h.security_id
+                    FROM portfolio_holding h JOIN strategy s USING (strategy_id)
+                    WHERE s.strategy_code = 'MOM_12_1' AND h.bucket = 10"""))
+sets = held.groupby("fm").security_id.apply(set)
+turn = pd.Series({fm + 1: (len(s - sets.get(fm - 1, set())) / len(s)) if (fm - 1) in sets.index else 1.0
+                  for fm, s in sets.items()}).reindex(wide.index).fillna(1.0)
+index_final = (1 + wide["nifty"]).prod()
+lo, hi = 0.0, 0.2
+for _ in range(60):          # bisection: the cost per unit traded at which winners = index
+    mid = (lo + hi) / 2
+    lo, hi = (mid, hi) if ((1 + wide[10]) * (1 - mid * turn)).prod() > index_final else (lo, mid)
+print(f"Average monthly turnover of the winners decile: {100 * turn.mean():.1f}%")
+print(f"Break-even cost: {100 * lo:.2f}% of the value traded at each rebalance")
+
+mret = num(query("SELECT security_id, month_no, ret FROM mv_monthly_return"))
+univ = num(query("SELECT month_no(month_end) AS fm, security_id FROM universe_member"))
+W = mret.pivot(index="month_no", columns="security_id", values="ret"); LW = np.log1p(W)
+signals = {"12-0 (includes the last month)": LW.rolling(12, min_periods=12).sum(),
+           "12-1 (skips it)": LW.shift(1).rolling(11, min_periods=11).sum(),
+           "1-0 (last month only)": LW}
+rows = []
+for name, S in signals.items():
+    x = univ.copy()
+    x["sig"] = S.stack().reindex(pd.MultiIndex.from_arrays([x.fm, x.security_id])).values
+    x["nxt"] = W.stack().reindex(pd.MultiIndex.from_arrays([x.fm + 1, x.security_id])).values
+    x = x.dropna()
+    x["dec"] = x.groupby("fm").sig.transform(lambda s: pd.qcut(s.rank(method="first"), 10, labels=False) + 1)
+    g = x.groupby(["fm", "dec"]).nxt.mean().unstack(); s = g[10] - g[1]
+    rows.append((name, len(s), 100 * s.mean(), s.mean() / s.std() * np.sqrt(len(s))))
+pd.DataFrame(rows, columns=["signal", "months", "D10 - D01 % a month", "t"]).round(2)
+''')
+reading("Costs and skip")
+
+md("""
 ## 3. What kinds of stocks are there? (k-means)
 
 `v_stock_features` gives one row per stock in today's 500-stock universe with at least 48 of
